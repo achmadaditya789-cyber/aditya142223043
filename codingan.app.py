@@ -2,229 +2,208 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
 
-# =====================================
-# Konfigurasi Halaman
-# =====================================
-
+# ==========================
+# PAGE CONFIG
+# ==========================
 st.set_page_config(
     page_title="Data Mining Dashboard",
     page_icon="📊",
     layout="wide"
 )
 
-st.title("📊 Data Mining Sales Dashboard")
-st.markdown("Dashboard Analisis Penjualan Menggunakan Streamlit")
+st.title("📊 Data Mining Dashboard")
+st.write("Dashboard Analisis Data Menggunakan Streamlit")
 
-# =====================================
-# Load Data
-# =====================================
-
-@st.cache_data
-def load_data():
-    df = pd.read_csv("data/sales_data.csv")
-    return df
-
-df = load_data()
-
-# =====================================
-# Data Cleaning
-# =====================================
-
-df.drop_duplicates(inplace=True)
-df.dropna(inplace=True)
-
-df["TotalSales"] = df["Price"] * df["Quantity"]
-
-# =====================================
-# Sidebar Filter
-# =====================================
-
-st.sidebar.header("Filter Data")
-
-category_filter = st.sidebar.multiselect(
-    "Pilih Kategori",
-    options=df["Category"].unique(),
-    default=df["Category"].unique()
+# ==========================
+# UPLOAD FILE
+# ==========================
+uploaded_file = st.sidebar.file_uploader(
+    "Upload Dataset CSV",
+    type=["csv"]
 )
 
-city_filter = st.sidebar.multiselect(
-    "Pilih Kota",
-    options=df["City"].unique(),
-    default=df["City"].unique()
-)
+if uploaded_file is not None:
 
-filtered_df = df[
-    (df["Category"].isin(category_filter))
-    &
-    (df["City"].isin(city_filter))
-]
+    df = pd.read_csv(uploaded_file)
 
-# =====================================
-# KPI
-# =====================================
+    st.success("Dataset berhasil diupload!")
 
-total_revenue = filtered_df["TotalSales"].sum()
-total_orders = len(filtered_df)
-avg_sales = filtered_df["TotalSales"].mean()
+    # ==========================
+    # PREVIEW DATA
+    # ==========================
+    st.header("📋 Preview Dataset")
 
-col1, col2, col3 = st.columns(3)
+    st.dataframe(df)
 
-with col1:
-    st.metric(
-        "💰 Total Revenue",
-        f"${total_revenue:,.0f}"
-    )
+    # ==========================
+    # INFORMASI DATA
+    # ==========================
+    st.header("ℹ️ Informasi Dataset")
 
-with col2:
-    st.metric(
-        "📦 Total Orders",
-        total_orders
-    )
+    col1, col2, col3 = st.columns(3)
 
-with col3:
-    st.metric(
-        "📈 Average Sales",
-        f"${avg_sales:,.2f}"
-    )
+    col1.metric("Jumlah Baris", df.shape[0])
+    col2.metric("Jumlah Kolom", df.shape[1])
+    col3.metric("Missing Value", df.isnull().sum().sum())
 
-# =====================================
-# Dataset
-# =====================================
+    # ==========================
+    # DATA CLEANING
+    # ==========================
+    st.header("🧹 Data Cleaning")
 
-st.subheader("📋 Dataset")
+    if st.button("Hapus Missing Value"):
+        df = df.dropna()
+        st.success("Missing value berhasil dihapus")
 
-st.dataframe(
-    filtered_df,
-    use_container_width=True
-)
+    st.dataframe(df)
 
-# =====================================
-# Statistik Deskriptif
-# =====================================
+    # ==========================
+    # STATISTIK DESKRIPTIF
+    # ==========================
+    st.header("📈 Statistik Deskriptif")
 
-st.subheader("📊 Statistik Deskriptif")
+    st.dataframe(df.describe())
 
-st.dataframe(
-    filtered_df.describe(),
-    use_container_width=True
-)
+    # ==========================
+    # VISUALISASI
+    # ==========================
+    st.header("📊 Visualisasi Data")
 
-# =====================================
-# Sales per Category
-# =====================================
+    numeric_cols = df.select_dtypes(
+        include=["int64", "float64"]
+    ).columns.tolist()
 
-st.subheader("📈 Sales per Category")
+    if len(numeric_cols) > 0:
 
-category_sales = (
-    filtered_df
-    .groupby("Category")["TotalSales"]
-    .sum()
-    .reset_index()
-)
+        selected_col = st.selectbox(
+            "Pilih Kolom Numerik",
+            numeric_cols
+        )
 
-fig1, ax1 = plt.subplots(figsize=(6,4))
+        fig, ax = plt.subplots()
 
-ax1.bar(
-    category_sales["Category"],
-    category_sales["TotalSales"]
-)
+        ax.hist(df[selected_col], bins=15)
 
-ax1.set_xlabel("Category")
-ax1.set_ylabel("Revenue")
-ax1.set_title("Revenue by Category")
+        ax.set_title(
+            f"Distribusi {selected_col}"
+        )
 
-st.pyplot(fig1)
+        st.pyplot(fig)
 
-# =====================================
-# Sales per City
-# =====================================
+    # ==========================
+    # KORELASI
+    # ==========================
+    st.header("🔍 Korelasi Data")
 
-st.subheader("🏙️ Sales per City")
+    if len(numeric_cols) >= 2:
 
-city_sales = (
-    filtered_df
-    .groupby("City")["TotalSales"]
-    .sum()
-    .reset_index()
-)
+        corr = df[numeric_cols].corr()
 
-fig2, ax2 = plt.subplots(figsize=(6,6))
+        st.dataframe(corr)
 
-ax2.pie(
-    city_sales["TotalSales"],
-    labels=city_sales["City"],
-    autopct="%1.1f%%"
-)
+        fig2, ax2 = plt.subplots()
 
-ax2.set_title("Revenue Distribution by City")
+        im = ax2.imshow(corr)
 
-st.pyplot(fig2)
+        plt.colorbar(im)
 
-# =====================================
-# Clustering K-Means
-# =====================================
+        ax2.set_xticks(range(len(corr.columns)))
+        ax2.set_xticklabels(
+            corr.columns,
+            rotation=45
+        )
 
-st.subheader("🤖 Customer/Product Clustering")
+        ax2.set_yticks(range(len(corr.columns)))
+        ax2.set_yticklabels(corr.columns)
 
-cluster_df = filtered_df.copy()
+        st.pyplot(fig2)
 
-X = cluster_df[["Price", "Quantity"]]
+    # ==========================
+    # K-MEANS CLUSTERING
+    # ==========================
+    st.header("🤖 K-Means Clustering")
 
-if len(cluster_df) >= 3:
+    if len(numeric_cols) >= 2:
 
-    kmeans = KMeans(
-        n_clusters=3,
-        random_state=42,
-        n_init=10
-    )
+        col_x = st.selectbox(
+            "Pilih Feature X",
+            numeric_cols,
+            key="x"
+        )
 
-    cluster_df["Cluster"] = kmeans.fit_predict(X)
+        col_y = st.selectbox(
+            "Pilih Feature Y",
+            numeric_cols,
+            key="y"
+        )
 
-    fig3, ax3 = plt.subplots(figsize=(8,5))
+        jumlah_cluster = st.slider(
+            "Jumlah Cluster",
+            2,
+            10,
+            3
+        )
 
-    scatter = ax3.scatter(
-        cluster_df["Price"],
-        cluster_df["Quantity"],
-        c=cluster_df["Cluster"]
-    )
+        data_cluster = df[[col_x, col_y]]
 
-    ax3.set_xlabel("Price")
-    ax3.set_ylabel("Quantity")
-    ax3.set_title("K-Means Clustering")
+        scaler = StandardScaler()
 
-    st.pyplot(fig3)
+        scaled = scaler.fit_transform(
+            data_cluster
+        )
 
-    st.dataframe(
-        cluster_df,
-        use_container_width=True
+        kmeans = KMeans(
+            n_clusters=jumlah_cluster,
+            random_state=42,
+            n_init=10
+        )
+
+        cluster = kmeans.fit_predict(
+            scaled
+        )
+
+        df["Cluster"] = cluster
+
+        fig3, ax3 = plt.subplots()
+
+        scatter = ax3.scatter(
+            df[col_x],
+            df[col_y],
+            c=df["Cluster"]
+        )
+
+        ax3.set_xlabel(col_x)
+        ax3.set_ylabel(col_y)
+        ax3.set_title(
+            "Hasil Clustering"
+        )
+
+        st.pyplot(fig3)
+
+        st.dataframe(df)
+
+    else:
+        st.warning(
+            "Minimal diperlukan 2 kolom numerik untuk clustering"
+        )
+
+    # ==========================
+    # DOWNLOAD HASIL
+    # ==========================
+    st.header("⬇ Download Data")
+
+    csv = df.to_csv(index=False)
+
+    st.download_button(
+        label="Download CSV",
+        data=csv,
+        file_name="hasil_data_mining.csv",
+        mime="text/csv"
     )
 
 else:
-    st.warning(
-        "Data tidak cukup untuk clustering."
+    st.info(
+        "Silakan upload dataset CSV terlebih dahulu."
     )
-
-# =====================================
-# Download Dataset
-# =====================================
-
-st.subheader("⬇️ Download Data")
-
-csv = filtered_df.to_csv(index=False)
-
-st.download_button(
-    label="Download CSV",
-    data=csv,
-    file_name="sales_analysis.csv",
-    mime="text/csv"
-)
-
-# =====================================
-# Footer
-# =====================================
-
-st.markdown("---")
-st.markdown(
-    "Dibuat dengan ❤️ menggunakan Streamlit dan Python"
-)
