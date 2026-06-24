@@ -1,11 +1,3 @@
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-
-# =====================================
-# KONFIGURASI HALAMAN
-# =====================================
-
 st.set_page_config(
     page_title="Dashboard Data Mining",
     page_icon="📊",
